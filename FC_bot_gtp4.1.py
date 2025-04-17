@@ -220,7 +220,7 @@ async def forward_to_approval(event):
 async def check_approval_response(event):
     try:
         text = event.raw_text.strip().lower()
-        if text == "ok" and event.is_reply:
+        if text.lower() in ["ok", "ок"] and event.is_reply:
             replied_msg = await event.get_reply_message()
             if replied_msg:
                 approval_msg_id = str(replied_msg.id)
@@ -233,6 +233,13 @@ async def check_approval_response(event):
                         row = await cursor.fetchone()
                         if row:
                             original_message_id, source_channel_id, grouped_id = row
+                            # Получаем имя целевого канала
+                            try:
+                                channel_entity = await event.client.get_entity(target_channel)
+                                channel_title = getattr(channel_entity, "title", str(target_channel))
+                            except Exception as e:
+                                logger.error(f"ERROR: Не удалось получить имя целевого канала: {e}")
+                                channel_title = str(target_channel)
                             if grouped_id:
                                 # Это альбом, пересылаем все сообщения альбома
                                 async with db.execute(
@@ -246,6 +253,7 @@ async def check_approval_response(event):
                                     messages=msg_ids,
                                     from_peer=int(source_channel_id)
                                 )
+                                await event.reply(f"Переслано в {channel_title}")
                             else:
                                 # Обычное сообщение
                                 logger.info(f"INFO: Сообщение {original_message_id} одобрено, пересылаем в целевой канал.")
@@ -254,6 +262,7 @@ async def check_approval_response(event):
                                     messages=int(original_message_id),
                                     from_peer=int(source_channel_id)
                                 )
+                                await event.reply(f"Переслано в {channel_title}")
                         else:
                             logger.error(f"ERROR: Не найдена запись для сообщения {approval_msg_id}.")
     except Exception as e:
@@ -382,6 +391,20 @@ async def handle_remsource(event):
         await event.reply("Произошла ошибка при удалении источника.")
 
 # ------------------------------
+# Обработчик команды // – выводит список всех команд
+# ------------------------------
+@events.register(events.NewMessage(pattern=r'^//'))
+async def handle_help(event):
+    help_text = (
+        "Доступные команды:\n"
+        "/addsource — добавить новый канал-источник\n"
+        "/listsource — список всех источников\n"
+        "/remsource <id> — удалить источник по ID\n"
+        "Для публикации сообщения в целевой канал — ответьте на сообщение 'ok'."
+    )
+    await event.reply(help_text)
+
+# ------------------------------
 # Основная функция запуска бота с обработкой KeyboardInterrupt
 # ------------------------------
 async def main():
@@ -399,6 +422,7 @@ async def main():
         client.add_event_handler(wait_for_new_source, events.NewMessage)
         client.add_event_handler(handle_listsource, events.NewMessage(pattern=r'^/listsource'))
         client.add_event_handler(handle_remsource, events.NewMessage(pattern=r'^/remsource\s+(\-?\d+)'))
+        client.add_event_handler(handle_help, events.NewMessage(pattern=r'^/help'))
 
         logger.info("INFO: Телеграм клиент запущен и готов к работе.")
         await client.run_until_disconnected()
