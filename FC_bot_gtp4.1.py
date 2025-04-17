@@ -114,13 +114,22 @@ async def open_client_session(api_id, api_hash, max_attempts=3, delay=5):
 async def init_db():
     try:
         db = await aiosqlite.connect("fc_database.sqlite")
+        # Проверка и миграция: добавление grouped_id, если его нет
+        async with db.execute("PRAGMA table_info(forwarded_messages)") as cursor:
+            columns = [row[1] async for row in cursor]
+        if "grouped_id" not in columns:
+            logger.info("INFO: Миграция БД: добавляем столбец grouped_id в forwarded_messages...")
+            await db.execute("ALTER TABLE forwarded_messages ADD COLUMN grouped_id TEXT")
+            await db.commit()
+            logger.info("INFO: Миграция БД завершена: grouped_id добавлен.")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS forwarded_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 original_message_id TEXT NOT NULL,
                 approval_message_id TEXT,
                 source_channel_id TEXT NOT NULL,
-                forward_date TEXT NOT NULL
+                forward_date TEXT NOT NULL,
+                grouped_id TEXT
             )
         """)
         await db.execute("""
@@ -169,24 +178,43 @@ async def add_source_channel(channel_id):
 @events.register(events.NewMessage)
 async def forward_to_approval(event):
     try:
-        # logger.debug(f"DEBUG: Новое сообщение: chat_id={event.chat_id}, source_channels={source_channels}")
         if event.chat and getattr(event.chat, 'broadcast', False):
             channel_id = str(event.chat_id)
             if channel_id in source_channels:
                 logger.debug(f"DEBUG: Получено сообщение из источника {channel_id}.")
-                forwarded = await event.forward_to(approval_group)
-                logger.info(f"INFO: Сообщение {event.id} переслано в группу одобрения как {forwarded.id}.")
-                async with aiosqlite.connect("fc_database.sqlite") as db:
-                    await db.execute(
-                        "INSERT INTO forwarded_messages (original_message_id, approval_message_id, source_channel_id, forward_date) VALUES (?, ?, ?, ?)",
-                        (str(event.id), str(forwarded.id), channel_id, datetime.utcnow().isoformat())
-                    )
-                    await db.commit()
+                # Проверяем, часть ли это альбома
+                if event.grouped_id:
+                    # Получаем все сообщения альбома
+                    messages = []
+                    async for msg in event.client.iter_messages(event.chat_id, min_id=event.id-20, max_id=event.id+20):
+                        if msg.grouped_id == event.grouped_id:
+                            messages.append(msg)
+                    messages = sorted(messages, key=lambda m: m.id)
+                    forwarded = await event.client.forward_messages(approval_group, [m.id for m in messages], event.chat_id)
+                    logger.info(f"INFO: Альбом из {len(messages)} сообщений переслан в группу одобрения.")
+                    # Сохраняем все id сообщений альбома и их связь с grouped_id
+                    async with aiosqlite.connect("fc_database.sqlite") as db:
+                        for orig_msg, fwd_msg in zip(messages, forwarded):
+                            await db.execute(
+                                "INSERT INTO forwarded_messages (original_message_id, approval_message_id, source_channel_id, forward_date, grouped_id) VALUES (?, ?, ?, ?, ?)",
+                                (str(orig_msg.id), str(fwd_msg.id), channel_id, datetime.utcnow().isoformat(), str(event.grouped_id))
+                            )
+                        await db.commit()
+                else:
+                    forwarded = await event.forward_to(approval_group)
+                    logger.info(f"INFO: Сообщение {event.id} переслано в группу одобрения как {forwarded.id}.")
+                    # Сохраняем как раньше
+                    async with aiosqlite.connect("fc_database.sqlite") as db:
+                        await db.execute(
+                            "INSERT INTO forwarded_messages (original_message_id, approval_message_id, source_channel_id, forward_date, grouped_id) VALUES (?, ?, ?, ?, ?)",
+                            (str(event.id), str(forwarded.id), channel_id, datetime.utcnow().isoformat(), None)
+                        )
+                        await db.commit()
     except Exception as e:
         logger.error(f"ERROR: Ошибка при пересылке сообщения {event.id}: {e}")
 
 # ------------------------------
-# Обработчик для мониторинга approval_group: при ответе "ok" пересылаем исходное сообщение в target_channel
+# Обработчик для мониторинга approval_group: при ответе "ok" пересылаем исходное сообщение (или альбом) в target_channel
 # ------------------------------
 @events.register(events.NewMessage(chats=approval_group))
 async def check_approval_response(event):
@@ -197,19 +225,35 @@ async def check_approval_response(event):
             if replied_msg:
                 approval_msg_id = str(replied_msg.id)
                 async with aiosqlite.connect("fc_database.sqlite") as db:
+                    # Получаем запись по этому сообщению
                     async with db.execute(
-                        "SELECT original_message_id, source_channel_id FROM forwarded_messages WHERE approval_message_id = ?",
+                        "SELECT original_message_id, source_channel_id, grouped_id FROM forwarded_messages WHERE approval_message_id = ?",
                         (approval_msg_id,)
                     ) as cursor:
                         row = await cursor.fetchone()
                         if row:
-                            original_message_id, source_channel_id = row
-                            logger.info(f"INFO: Сообщение {original_message_id} одобрено, пересылаем в целевой канал.")
-                            await event.client.forward_messages(
-                                entity=target_channel,
-                                messages=int(original_message_id),
-                                from_peer=int(source_channel_id)
-                            )
+                            original_message_id, source_channel_id, grouped_id = row
+                            if grouped_id:
+                                # Это альбом, пересылаем все сообщения альбома
+                                async with db.execute(
+                                    "SELECT original_message_id FROM forwarded_messages WHERE grouped_id = ? AND source_channel_id = ? ORDER BY original_message_id ASC",
+                                    (grouped_id, source_channel_id)
+                                ) as cur2:
+                                    msg_ids = [int(r[0]) for r in await cur2.fetchall()]
+                                logger.info(f"INFO: Одобрен альбом, пересылаем {len(msg_ids)} сообщений в целевой канал.")
+                                await event.client.forward_messages(
+                                    entity=target_channel,
+                                    messages=msg_ids,
+                                    from_peer=int(source_channel_id)
+                                )
+                            else:
+                                # Обычное сообщение
+                                logger.info(f"INFO: Сообщение {original_message_id} одобрено, пересылаем в целевой канал.")
+                                await event.client.forward_messages(
+                                    entity=target_channel,
+                                    messages=int(original_message_id),
+                                    from_peer=int(source_channel_id)
+                                )
                         else:
                             logger.error(f"ERROR: Не найдена запись для сообщения {approval_msg_id}.")
     except Exception as e:
