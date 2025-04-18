@@ -430,7 +430,7 @@ async def handle_help(event):
 # Фоновая задача: аптайм и статистика
 # ------------------------------
 async def periodic_uptime_report():
-    print("[Uptime] печать аптайма стартовала")
+    print("[Uptime] печать аптайма стартовала", flush=True)
     try:
         while True:
             try:
@@ -446,12 +446,12 @@ async def periodic_uptime_report():
                         total_to_target = (await cur.fetchone())[0]
                 # print(f"[Uptime] now: {now.strftime('%Y-%m-%d %H:%M:%S')}")
                 # print(f"[Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в гру ппу: {total_to_group} | Переслано в целевой канал: {total_to_target}")
-                print(f"{now.strftime('%Y-%m-%d %H:%M:%S')} | [Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в группу: {total_to_group} | Переслано в целевой канал: {total_to_target}")
+                print(f"{now.strftime('%Y-%m-%d %H:%M:%S')} | [Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в группу: {total_to_group} | Переслано в целевой канал: {total_to_target}", flush=True)
             except Exception as e:
-                print(f"[Uptime] Ошибка при подсчёте статистики: {e}")
+                print(f"[Uptime] Ошибка при подсчёте статистики: {e}", flush=True)
             await asyncio.sleep(600)  # 10 минут
     except Exception as e:
-        print(f"[Uptime] задача по печати  аптайма  аварийно завершилась: {e}")
+        print(f"[Uptime] задача по печати  аптайма  аварийно завершилась: {e}", flush=True)
 
 # ------------------------------
 # Основная функция запуска бота с обработкой KeyboardInterrupt
@@ -509,6 +509,70 @@ if __name__ == '__main__':
         traceback.print_exc()
         input("Press Enter to exit...")
 
+
+
+# Как настроить автозапуск Python-скрипта через Task Scheduler
+# 1. Откройте Планировщик заданий
+# Нажмите Win+R, введите 
+# taskschd.msc
+# и нажмите Enter.
+# 2. Создайте новую задачу
+# В меню справа выберите Создать задачу... (не простую задачу!).
+# 3. Вкладка "Общие"
+# Дайте задаче имя, например: FlowCuratorBot
+# Выберите "Выполнять для всех пользователей" (если нужно).
+# Поставьте галочку "Выполнять с наивысшими правами" (если требуется доступ к сети/файлам).
+# 4. Вкладка "Триггеры"
+# Нажмите "Создать..."
+# Выберите "При входе в систему" или "При запуске" (если бот должен стартовать при загрузке Windows).
+# 5. Вкладка "Действия"
+# Нажмите "Создать..."
+# Действие: Запуск программы
+# Программа или сценарий:
+# Укажите путь к вашему интерпретатору Python, например:
+
+#   C:\Users\Acer\AppData\Local\Programs\Python\Python311\python.exe
+
+# (или где у вас установлен Python)
+# Добавить аргументы:
+
+# FC_bot_gtp4.1.py
+
+# Рабочая папка:
+# Укажите папку, где лежит ваш скрипт, например:
+
+#   C:\Users\Acer\Documents\python_lessons\Sergios_projects\FlowCurator_Bot_tg_gpt4.1
+
+# 6. Вкладка "Условия"
+# Отключите "Запускать только при питании от сети" (если не нужно).
+# В "Параметрах" можно включить "Перезапускать при сбое" и задать интервал.
+# 7. Сохраните задачу
+# Нажмите OK, введите пароль (если потребуется).
+# Как увидеть вывод скрипта?
+# Task Scheduler по умолчанию не показывает окно консоли.
+# Если хотите видеть окно:
+# В "Действии" укажите запуск не python.exe, а cmd.exe с аргументами:
+
+#     /k python FC_bot_gtp4.1.py
+
+# Это откроет консоль и не закроет её после завершения скрипта.
+# Пример для поля "Действие":
+# Программа или сценарий:
+  
+# cmd.exe
+  
+# Добавить аргументы:
+
+# /k python FC_bot_gtp4.1.py
+
+# Рабочая папка:
+
+# C:\Users\Acer\Documents\python_lessons\Sergios_projects\FlowCurator_Bot_tg_gpt4.1
+  
+
+
+##################################
+# Telethon API connecting issues :
 
 # Test config 
 # 149.154.167.40:443
