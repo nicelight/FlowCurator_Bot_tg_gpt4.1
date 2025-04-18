@@ -7,7 +7,7 @@ import sys
 import signal
 from telethon import TelegramClient, events
 import aiosqlite
-from datetime import datetime
+from datetime import datetime, timedelta
 import re
 from telethon.tl.functions.channels import JoinChannelRequest
 
@@ -37,6 +37,7 @@ target_channel = -1002252559154      # ID целевого канала
 source_channels = []        # Список id источников (каналов) в виде строк
 awaiting_new_source = False # Флаг ожидания нового источника после команды /addsource
 my_user_id = None
+start_time = datetime.utcnow()  # Время старта для аптайма
 
 # ------------------------------
 # Настройка логирования: запись в файлы и вывод в консоль
@@ -122,6 +123,14 @@ async def init_db():
             await db.execute("ALTER TABLE forwarded_messages ADD COLUMN grouped_id TEXT")
             await db.commit()
             logger.info("INFO: Миграция БД завершена: grouped_id добавлен.")
+        # Миграция: добавляем поле forwarded_to_target, если его нет
+        async with db.execute("PRAGMA table_info(forwarded_messages)") as cursor:
+            columns = [row[1] async for row in cursor]
+        if "forwarded_to_target" not in columns:
+            logger.info("INFO: Миграция БД: добавляем столбец forwarded_to_target в forwarded_messages...")
+            await db.execute("ALTER TABLE forwarded_messages ADD COLUMN forwarded_to_target INTEGER DEFAULT 0")
+            await db.commit()
+            logger.info("INFO: Миграция БД завершена: forwarded_to_target добавлен.")
         await db.execute("""
             CREATE TABLE IF NOT EXISTS forwarded_messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -129,7 +138,8 @@ async def init_db():
                 approval_message_id TEXT,
                 source_channel_id TEXT NOT NULL,
                 forward_date TEXT NOT NULL,
-                grouped_id TEXT
+                grouped_id TEXT,
+                forwarded_to_target INTEGER DEFAULT 0
             )
         """)
         await db.execute("""
@@ -253,6 +263,12 @@ async def check_approval_response(event):
                                     messages=msg_ids,
                                     from_peer=int(source_channel_id)
                                 )
+                                # Отмечаем как пересланные в целевой канал
+                                await db.execute(
+                                    "UPDATE forwarded_messages SET forwarded_to_target = 1 WHERE grouped_id = ? AND source_channel_id = ?",
+                                    (grouped_id, source_channel_id)
+                                )
+                                await db.commit()
                                 await event.reply(f"Переслано в {channel_title}")
                             else:
                                 # Обычное сообщение
@@ -262,6 +278,12 @@ async def check_approval_response(event):
                                     messages=int(original_message_id),
                                     from_peer=int(source_channel_id)
                                 )
+                                # Отмечаем как пересланное в целевой канал
+                                await db.execute(
+                                    "UPDATE forwarded_messages SET forwarded_to_target = 1 WHERE original_message_id = ? AND source_channel_id = ?",
+                                    (original_message_id, source_channel_id)
+                                )
+                                await db.commit()
                                 await event.reply(f"Переслано в {channel_title}")
                         else:
                             logger.error(f"ERROR: Не найдена запись для сообщения {approval_msg_id}.")
@@ -405,6 +427,28 @@ async def handle_help(event):
     await event.reply(help_text)
 
 # ------------------------------
+# Фоновая задача: аптайм и статистика
+# ------------------------------
+async def periodic_uptime_report():
+    while True:
+        try:
+            now = datetime.utcnow()
+            uptime = now - start_time
+            days = uptime.days
+            hours, remainder = divmod(uptime.seconds, 3600)
+            minutes, _ = divmod(remainder, 60)
+            # Считаем количество пересланных в группу и в целевой канал
+            async with aiosqlite.connect("fc_database.sqlite") as db:
+                async with db.execute("SELECT COUNT(*) FROM forwarded_messages") as cur:
+                    total_to_group = (await cur.fetchone())[0]
+                async with db.execute("SELECT COUNT(*) FROM forwarded_messages WHERE forwarded_to_target = 1") as cur:
+                    total_to_target = (await cur.fetchone())[0]
+            print(f"[Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в группу: {total_to_group} | Переслано в целевой канал: {total_to_target}")
+        except Exception as e:
+            print(f"[Uptime] Ошибка при подсчёте статистики: {e}")
+        await asyncio.sleep(600)  # 10 минут
+
+# ------------------------------
 # Основная функция запуска бота с обработкой KeyboardInterrupt
 # ------------------------------
 async def main():
@@ -414,6 +458,9 @@ async def main():
         me = await client.get_me()
         my_user_id = me.id
         await init_db()  # Инициализируем базу данных и загружаем источники
+
+        # Запускаем фоновую задачу аптайма
+        asyncio.create_task(periodic_uptime_report())
 
         # Регистрируем обработчики (если декораторы уже используются, их можно не дублировать)
         client.add_event_handler(forward_to_approval, events.NewMessage)
