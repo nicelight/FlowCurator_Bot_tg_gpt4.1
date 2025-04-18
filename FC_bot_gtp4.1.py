@@ -27,6 +27,7 @@ from telethon.tl.functions.channels import JoinChannelRequest
 #API ключи от telegram user bot: my.telegram.org
 YOUR_API_ID = 25979825
 YOUR_API_HASH = 'e2a55f23f44e1aeda0fc6223b0505d7e'
+SETGROUP_PASSWORD = "5555"  # Пароль для смены группы одобрения
 approval_group = -1002284347666    #  ID группы одобрения
 target_channel = -1002252559154      # ID целевого канала
 
@@ -38,6 +39,9 @@ source_channels = []        # Список id источников (канало
 awaiting_new_source = False # Флаг ожидания нового источника после команды /addsource
 my_user_id = None
 start_time = datetime.utcnow()  # Время старта для аптайма
+set_target_mode = False  # Флаг ожидания установки целевого канала
+set_group_mode = False  # Флаг ожидания установки группы одобрения
+set_group_wait_link = False  # Флаг ожидания ссылки на группу
 
 # ------------------------------
 # Настройка логирования: запись в файлы и вывод в консоль
@@ -110,7 +114,7 @@ async def open_client_session(api_id, api_hash, max_attempts=3, delay=5):
 
 # ------------------------------
 # Инициализация базы данных SQLite
-# Создаем таблицы для хранения пересланных сообщений и источников каналов
+# Создаем таблицы для хранения пересланных сообщений, источников каналов и настроек
 # ------------------------------
 async def init_db():
     try:
@@ -149,6 +153,13 @@ async def init_db():
                 added_date TEXT NOT NULL
             )
         """)
+        # Новая таблица для хранения настроек
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
         await db.commit()
         logger.info("INFO: База данных успешно проинициализирована.")
         async with db.execute("SELECT channel_id FROM source_channels") as cursor:
@@ -156,6 +167,25 @@ async def init_db():
             for row in rows:
                 source_channels.append(row[0])
         logger.debug(f"DEBUG: Загружены источники: {source_channels}")
+        # Загружаем целевой канал из базы, если есть
+        global target_channel, approval_group
+        async with db.execute("SELECT value FROM settings WHERE key = 'target_channel'") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                try:
+                    target_channel = int(row[0])
+                    logger.info(f"INFO: Загружен целевой канал из базы: {target_channel}")
+                except Exception as e:
+                    logger.error(f"ERROR: Не удалось преобразовать target_channel из базы: {e}")
+        # Загружаем группу одобрения из базы, если есть
+        async with db.execute("SELECT value FROM settings WHERE key = 'approval_group'") as cursor:
+            row = await cursor.fetchone()
+            if row:
+                try:
+                    approval_group = int(row[0])
+                    logger.info(f"INFO: Загружена группа одобрения из базы: {approval_group}")
+                except Exception as e:
+                    logger.error(f"ERROR: Не удалось преобразовать approval_group из базы: {e}")
         return db
     except Exception as e:
         logger.error(f"ERROR: Ошибка при инициализации базы данных: {e}")
@@ -251,6 +281,16 @@ async def check_approval_response(event):
                                 logger.error(f"ERROR: Не удалось получить имя целевого канала: {e}")
                                 channel_title = str(target_channel)
                             if grouped_id:
+                                # Проверяем, был ли альбом уже переслан
+                                async with db.execute(
+                                    "SELECT COUNT(*) FROM forwarded_messages WHERE grouped_id = ? AND source_channel_id = ? AND forwarded_to_target = 1",
+                                    (grouped_id, source_channel_id)
+                                ) as check_cur:
+                                    already_forwarded = (await check_cur.fetchone())[0] > 0
+                                if already_forwarded:
+                                    await event.reply(f"Альбом уже был опубликован в {channel_title}")
+                                    logger.info(f"INFO: Попытка повторной публикации альбома grouped_id={grouped_id}, отклонено.")
+                                    return
                                 # Это альбом, пересылаем все сообщения альбома
                                 async with db.execute(
                                     "SELECT original_message_id FROM forwarded_messages WHERE grouped_id = ? AND source_channel_id = ? ORDER BY original_message_id ASC",
@@ -271,6 +311,16 @@ async def check_approval_response(event):
                                 await db.commit()
                                 await event.reply(f"Переслано в {channel_title}")
                             else:
+                                # Проверяем, было ли сообщение уже переслано
+                                async with db.execute(
+                                    "SELECT forwarded_to_target FROM forwarded_messages WHERE original_message_id = ? AND source_channel_id = ?",
+                                    (original_message_id, source_channel_id)
+                                ) as check_cur:
+                                    already_forwarded = (await check_cur.fetchone())[0] == 1
+                                if already_forwarded:
+                                    await event.reply(f"Сообщение уже было опубликовано в {channel_title}")
+                                    logger.info(f"INFO: Попытка повторной публикации сообщения id={original_message_id}, отклонено.")
+                                    return
                                 # Обычное сообщение
                                 logger.info(f"INFO: Сообщение {original_message_id} одобрено, пересылаем в целевой канал.")
                                 await event.client.forward_messages(
@@ -413,6 +463,125 @@ async def handle_remsource(event):
         await event.reply("Произошла ошибка при удалении источника.")
 
 # ------------------------------
+# Обработчик команды /settarget – устанавливает целевой канал
+# ------------------------------
+@events.register(events.NewMessage(pattern=r'^/settarget'))
+async def handle_settarget(event):
+    global set_target_mode
+    set_target_mode = True
+    await event.reply("Пожалуйста, перешлите сообщение из канала, который должен стать целевым.")
+
+@events.register(events.NewMessage)
+async def wait_for_settarget(event):
+    global set_target_mode, target_channel, my_user_id
+    if not set_target_mode:
+        return
+    if not (event.is_private or (event.chat_id == approval_group)):
+        return
+    if event.sender_id == my_user_id:
+        return
+    channel_id = None
+    if event.fwd_from:
+        if hasattr(event.fwd_from, "channel_id") and event.fwd_from.channel_id:
+            channel_id = str(event.fwd_from.channel_id)
+        elif hasattr(event.fwd_from, "from_id") and hasattr(event.fwd_from.from_id, "channel_id"):
+            channel_id = str(event.fwd_from.from_id.channel_id)
+    if channel_id:
+        try:
+            entity_id = int(channel_id)
+            if not str(channel_id).startswith("-100"):
+                entity_id = int(f"-100{channel_id}")
+            channel_entity = await event.client.get_entity(entity_id)
+            channel_title = getattr(channel_entity, "title", str(channel_id))
+        except Exception as e:
+            logger.error(f"ERROR: Не удалось получить имя канала по id {channel_id}: {e}")
+            channel_title = str(channel_id)
+        target_channel = int(entity_id)
+        set_target_mode = False
+        # Сохраняем целевой канал в базу
+        async with aiosqlite.connect("fc_database.sqlite") as db:
+            await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("target_channel", str(target_channel)))
+            await db.commit()
+        await event.reply(f"Канал {channel_title} установлен как целевой.")
+        logger.info(f"INFO: Канал {channel_title} ({channel_id}) установлен как целевой.")
+    else:
+        logger.warning("WARNING: Получено сообщение не из канала или без channel_id, игнорируем.")
+
+# ------------------------------
+# Обработчик команды /setgroup – смена группы для одобрения (только в ЛС, с паролем)
+# ------------------------------
+@events.register(events.NewMessage(pattern=r'^/setgroup.*'))
+async def handle_setgroup(event):
+    global set_group_mode, set_group_wait_link
+    if not event.is_private:
+        return
+    text = event.raw_text.strip().replace(" ", "")
+    if f"/setgroup{SETGROUP_PASSWORD}" in text:
+        set_group_mode = True
+        set_group_wait_link = True
+        await event.reply("Пожалуйста, добавьте меня в группу для курирования и пришлите ссылку на группу (например, t.me/xxxxx).")
+    else:
+        username = event.sender.username if event.sender and hasattr(event.sender, 'username') and event.sender.username else str(event.sender_id)
+        await event.reply("давай не будем играться")
+        logger.warning(f"WARNING: {username} пытается сменить нашу групу.")
+        # Отправляем предупреждение в текущую approval_group
+        try:
+            await event.client.send_message(approval_group, f"warning!  {username} пытается сменить нашу групу")
+        except Exception as e:
+            logger.error(f"ERROR: Не удалось отправить предупреждение в approval_group: {e}")
+
+@events.register(events.NewMessage)
+async def wait_for_setgroup(event):
+    global set_group_mode, set_group_wait_link, approval_group, my_user_id
+    if not set_group_mode or not set_group_wait_link:
+        return
+    if not event.is_private:
+        return
+    if event.sender_id == my_user_id:
+        return
+    text = event.raw_text.strip()
+    # Проверяем, что это ссылка t.me/xxxxx
+    if not (text.startswith("t.me/") or text.startswith("https://t.me/")):
+        await event.reply("Ссылка должна быть вида t.me/xxxxx")
+        return
+    # Приводим к username
+    link = text.replace("https://", "").replace("http://", "").replace("t.me/", "").strip()
+    if not link:
+        await event.reply("Ссылка должна быть вида t.me/xxxxx")
+        return
+    try:
+        entity = await event.client.get_entity(link)
+        group_title = getattr(entity, "title", str(link))
+        # Проверяем, что это именно группа, а не канал
+        is_group = False
+        if hasattr(entity, 'megagroup') and entity.megagroup:
+            is_group = True
+        if hasattr(entity, 'gigagroup') and entity.gigagroup:
+            is_group = True
+        if hasattr(entity, 'broadcast') and entity.broadcast:
+            is_group = False
+        if not is_group:
+            await event.reply("Это канал, а не группа. Пожалуйста, пришлите ссылку на группу.")
+            logger.warning(f"WARNING: Попытка установить канал {group_title} ({link}) как группу для одобрения — отклонено.")
+            set_group_mode = False
+            set_group_wait_link = False
+            return
+        approval_group = int(entity.id)
+        set_group_mode = False
+        set_group_wait_link = False
+        # Сохраняем группу одобрения в базу
+        async with aiosqlite.connect("fc_database.sqlite") as db:
+            await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("approval_group", str(approval_group)))
+            await db.commit()
+        await event.reply(f"Теперь я буду отправлять весь контент в группу {group_title}")
+        logger.info(f"INFO: Группа {group_title} ({link}) установлена как группа одобрения.")
+    except Exception as e:
+        await event.reply(f"Ошибка при определении группы по ссылке: {e}")
+        logger.error(f"ERROR: Не удалось получить entity по ссылке {link}: {e}")
+        set_group_mode = False
+        set_group_wait_link = False
+
+# ------------------------------
 # Обработчик команды // – выводит список всех команд
 # ------------------------------
 @events.register(events.NewMessage(pattern=r'^//'))
@@ -422,6 +591,8 @@ async def handle_help(event):
         "/addsource — добавить новый канал-источник\n"
         "/listsource — список всех источников\n"
         "/remsource <id> — удалить источник по ID\n"
+        "/settarget — установить целевой канал\n"
+        "/setgroup — сменить группу для одобрения (только в ЛС, переслать сообщение из нужной группы)\n"
         "Для публикации сообщения в целевой канал — ответьте на сообщение 'ok'."
     )
     await event.reply(help_text)
@@ -476,6 +647,10 @@ async def run_bot_forever():
             client.add_event_handler(wait_for_new_source, events.NewMessage)
             client.add_event_handler(handle_listsource, events.NewMessage(pattern=r'^/listsource'))
             client.add_event_handler(handle_remsource, events.NewMessage(pattern=r'^/remsource\s+(\-?\d+)'))
+            client.add_event_handler(handle_settarget, events.NewMessage(pattern=r'^/settarget'))
+            client.add_event_handler(wait_for_settarget, events.NewMessage)
+            client.add_event_handler(handle_setgroup, events.NewMessage(pattern=r'^/setgroup.*'))
+            client.add_event_handler(wait_for_setgroup, events.NewMessage)
             client.add_event_handler(handle_help, events.NewMessage(pattern=r'^/help'))
 
             logger.info("INFO: Телеграм клиент запущен и готов к работе.")
@@ -483,7 +658,8 @@ async def run_bot_forever():
             logger.warning("WARNING: Клиент отключился. Перезапуск через 5 секунд...")
         except KeyboardInterrupt:
             logger.info("INFO: Программа завершена пользователем (KeyboardInterrupt).")
-            break
+            print("Программа завершена пользователем (KeyboardInterrupt).")
+            sys.exit(0)
         except Exception as e:
             logger.error(f"ERROR: Критическая ошибка в основном цикле: {e}")
             import traceback
@@ -502,6 +678,7 @@ if __name__ == '__main__':
         asyncio.run(run_bot_forever())
     except KeyboardInterrupt:
         logger.info("INFO: Программа завершена пользователем (KeyboardInterrupt).")
+        print("Программа завершена пользователем (KeyboardInterrupt).")
         sys.exit(0)
     except Exception as e:
         print(f"FATAL ERROR: {e}")
