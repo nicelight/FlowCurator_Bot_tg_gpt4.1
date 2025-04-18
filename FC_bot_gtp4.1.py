@@ -430,63 +430,84 @@ async def handle_help(event):
 # Фоновая задача: аптайм и статистика
 # ------------------------------
 async def periodic_uptime_report():
-    while True:
-        try:
-            now = datetime.utcnow()
-            uptime = now - start_time
-            days = uptime.days
-            hours, remainder = divmod(uptime.seconds, 3600)
-            minutes, _ = divmod(remainder, 60)
-            # Считаем количество пересланных в группу и в целевой канал
-            async with aiosqlite.connect("fc_database.sqlite") as db:
-                async with db.execute("SELECT COUNT(*) FROM forwarded_messages") as cur:
-                    total_to_group = (await cur.fetchone())[0]
-                async with db.execute("SELECT COUNT(*) FROM forwarded_messages WHERE forwarded_to_target = 1") as cur:
-                    total_to_target = (await cur.fetchone())[0]
-            print(f"[Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в группу: {total_to_group} | Переслано в целевой канал: {total_to_target}")
-        except Exception as e:
-            print(f"[Uptime] Ошибка при подсчёте статистики: {e}")
-        await asyncio.sleep(600)  # 10 минут
+    print("[Uptime] печать аптайма стартовала")
+    try:
+        while True:
+            try:
+                now = datetime.utcnow()
+                uptime = now - start_time
+                days = uptime.days
+                hours, remainder = divmod(uptime.seconds, 3600)
+                minutes, _ = divmod(remainder, 60)
+                async with aiosqlite.connect("fc_database.sqlite") as db:
+                    async with db.execute("SELECT COUNT(*) FROM forwarded_messages") as cur:
+                        total_to_group = (await cur.fetchone())[0]
+                    async with db.execute("SELECT COUNT(*) FROM forwarded_messages WHERE forwarded_to_target = 1") as cur:
+                        total_to_target = (await cur.fetchone())[0]
+                # print(f"[Uptime] now: {now.strftime('%Y-%m-%d %H:%M:%S')}")
+                # print(f"[Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в гру ппу: {total_to_group} | Переслано в целевой канал: {total_to_target}")
+                print(f"{now.strftime('%Y-%m-%d %H:%M:%S')} | [Uptime] {days}d:{hours:02}:{minutes:02} | Переслано в группу: {total_to_group} | Переслано в целевой канал: {total_to_target}")
+            except Exception as e:
+                print(f"[Uptime] Ошибка при подсчёте статистики: {e}")
+            await asyncio.sleep(600)  # 10 минут
+    except Exception as e:
+        print(f"[Uptime] задача по печати  аптайма  аварийно завершилась: {e}")
 
 # ------------------------------
 # Основная функция запуска бота с обработкой KeyboardInterrupt
 # ------------------------------
-async def main():
+async def run_bot_forever():
     global my_user_id
-    try:
-        client = await open_client_session(YOUR_API_ID, YOUR_API_HASH)
-        me = await client.get_me()
-        my_user_id = me.id
-        await init_db()  # Инициализируем базу данных и загружаем источники
+    while True:
+        try:
+            logger.info("INFO: Запуск Telegram клиента...")
+            client = await open_client_session(YOUR_API_ID, YOUR_API_HASH)
+            me = await client.get_me()
+            my_user_id = me.id
+            await init_db()  # Инициализируем базу данных и загружаем источники
 
-        # Запускаем фоновую задачу аптайма
-        asyncio.create_task(periodic_uptime_report())
+            # Запускаем фоновую задачу аптайма
+            asyncio.create_task(periodic_uptime_report())
 
-        # Регистрируем обработчики (если декораторы уже используются, их можно не дублировать)
-        client.add_event_handler(forward_to_approval, events.NewMessage)
-        client.add_event_handler(check_approval_response, events.NewMessage(chats=approval_group))
-        client.add_event_handler(handle_addsource, events.NewMessage(pattern=r'^/addsource'))
-        client.add_event_handler(wait_for_new_source, events.NewMessage)
-        client.add_event_handler(handle_listsource, events.NewMessage(pattern=r'^/listsource'))
-        client.add_event_handler(handle_remsource, events.NewMessage(pattern=r'^/remsource\s+(\-?\d+)'))
-        client.add_event_handler(handle_help, events.NewMessage(pattern=r'^/help'))
+            # Регистрируем обработчики
+            client.add_event_handler(forward_to_approval, events.NewMessage)
+            client.add_event_handler(check_approval_response, events.NewMessage(chats=approval_group))
+            client.add_event_handler(handle_addsource, events.NewMessage(pattern=r'^/addsource'))
+            client.add_event_handler(wait_for_new_source, events.NewMessage)
+            client.add_event_handler(handle_listsource, events.NewMessage(pattern=r'^/listsource'))
+            client.add_event_handler(handle_remsource, events.NewMessage(pattern=r'^/remsource\s+(\-?\d+)'))
+            client.add_event_handler(handle_help, events.NewMessage(pattern=r'^/help'))
 
-        logger.info("INFO: Телеграм клиент запущен и готов к работе.")
-        await client.run_until_disconnected()
-    except KeyboardInterrupt:
-        logger.info("INFO: Программа завершена пользователем (KeyboardInterrupt).")
-    except Exception as e:
-        logger.error(f"ERROR: Ошибка в основном цикле: {e}")
-    finally:
-        await client.disconnect()
-        logger.info("INFO: Сессия клиента закрыта.")
+            logger.info("INFO: Телеграм клиент запущен и готов к работе.")
+            await client.run_until_disconnected()
+            logger.warning("WARNING: Клиент отключился. Перезапуск через 5 секунд...")
+        except KeyboardInterrupt:
+            logger.info("INFO: Программа завершена пользователем (KeyboardInterrupt).")
+            break
+        except Exception as e:
+            logger.error(f"ERROR: Критическая ошибка в основном цикле: {e}")
+            import traceback
+            traceback.print_exc()
+            logger.info("INFO: Перезапуск через 5 секунд...")
+            await asyncio.sleep(5)
+        finally:
+            try:
+                await client.disconnect()
+            except Exception:
+                pass
+            logger.info("INFO: Сессия клиента закрыта.")
 
 if __name__ == '__main__':
     try:
-        asyncio.run(main())
+        asyncio.run(run_bot_forever())
     except KeyboardInterrupt:
         logger.info("INFO: Программа завершена пользователем (KeyboardInterrupt).")
         sys.exit(0)
+    except Exception as e:
+        print(f"FATAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
+        input("Press Enter to exit...")
 
 
 # Test config 
