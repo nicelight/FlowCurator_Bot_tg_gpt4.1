@@ -368,9 +368,10 @@ async def handle_addsource(event):
 @events.register(events.NewMessage)
 async def wait_for_new_source(event):
     global awaiting_new_source, set_target_mode, set_group_mode, set_group_wait_link, my_user_id
-    logger.debug(f"DEBUG: wait_for_new_source вызван. awaiting_new_source={awaiting_new_source}, set_target_mode={set_target_mode}, set_group_mode={set_group_mode}, set_group_wait_link={set_group_wait_link}")
+    logger.debug("DEBUG: обработка нового сообщения")
+    # logger.debug(f"DEBUG: wait_for_new_source вызван. awaiting_new_source={awaiting_new_source}, set_target_mode={set_target_mode}, set_group_mode={set_group_mode}, set_group_wait_link={set_group_wait_link}")
     if not awaiting_new_source or set_target_mode or set_group_mode or set_group_wait_link:
-        logger.debug("DEBUG: wait_for_new_source: неактивен режим ожидания нового источника, выходим")
+        # logger.debug("DEBUG: wait_for_new_source: неактивен режим ожидания нового источника, выходим")
         return
     logger.debug(f"DEBUG: Типы: event.chat_id={event.chat_id} ({type(event.chat_id)}), approval_group={approval_group} ({type(approval_group)})")
     if not (event.is_private or (int(event.chat_id) == int(approval_group))):
