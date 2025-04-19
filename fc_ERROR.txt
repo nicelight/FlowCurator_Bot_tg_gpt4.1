@@ -10,3 +10,4 @@
 2025-04-17 20:06:34,779 - ERROR - ERROR: Не удалось получить имя канала по id -1001572735585: The channel specified is private and you lack permission to access it. Another reason may be that you were banned from it (caused by GetChannelsRequest)
 2025-04-17 21:16:38,430 - ERROR - ERROR: Ошибка в основном цикле: Connection to Telegram failed 5 time(s)
 2025-04-18 02:25:35,025 - ERROR - ERROR: Не удалось получить имя канала по id -1001572735585: The channel specified is private and you lack permission to access it. Another reason may be that you were banned from it (caused by GetChannelsRequest)
+2025-04-18 23:52:48,226 - ERROR - ERROR: Не найдена запись для сообщения 520.

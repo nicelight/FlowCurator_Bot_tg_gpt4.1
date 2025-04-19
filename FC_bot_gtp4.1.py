@@ -182,7 +182,10 @@ async def init_db():
             row = await cursor.fetchone()
             if row:
                 try:
-                    approval_group = int(row[0])
+                    val = str(row[0])
+                    if not val.startswith('-100'):
+                        val = f'-100{val}'
+                    approval_group = int(val)
                     logger.info(f"INFO: Загружена группа одобрения из базы: {approval_group}")
                 except Exception as e:
                     logger.error(f"ERROR: Не удалось преобразовать approval_group из базы: {e}")
@@ -341,36 +344,54 @@ async def check_approval_response(event):
         logger.error(f"ERROR: Ошибка в обработчике одобрения: {e}")
 
 # ------------------------------
+# Функция сброса всех режимов ожидания
+# ------------------------------
+def reset_all_modes():
+    global awaiting_new_source, set_target_mode, set_group_mode, set_group_wait_link
+    awaiting_new_source = False
+    set_target_mode = False
+    set_group_mode = False
+    set_group_wait_link = False
+
+# ------------------------------
 # Обработчик команды /addsource – добавляет новый источник (канал)
 # ------------------------------
 @events.register(events.NewMessage(pattern=r'^/addsource'))
 async def handle_addsource(event):
     global awaiting_new_source
+    logger.debug("DEBUG: Вызван обработчик handle_addsource")
+    reset_all_modes()
     awaiting_new_source = True
+    logger.debug(f"DEBUG: awaiting_new_source установлен в True, остальные режимы сброшены")
     await event.reply("Пожалуйста, перешлите сообщение из нового канала, который хотите добавить в источники.")
 
-# Обработчик ожидания нового источника
 @events.register(events.NewMessage)
 async def wait_for_new_source(event):
-    global awaiting_new_source, my_user_id
-    if not awaiting_new_source:
+    global awaiting_new_source, set_target_mode, set_group_mode, set_group_wait_link, my_user_id
+    logger.debug(f"DEBUG: wait_for_new_source вызван. awaiting_new_source={awaiting_new_source}, set_target_mode={set_target_mode}, set_group_mode={set_group_mode}, set_group_wait_link={set_group_wait_link}")
+    if not awaiting_new_source or set_target_mode or set_group_mode or set_group_wait_link:
+        logger.debug("DEBUG: wait_for_new_source: неактивен режим ожидания нового источника, выходим")
         return
-    if not (event.is_private or (event.chat_id == approval_group)):
-        # logger.debug(f"DEBUG: Сообщение получено не в личке и не в группе модерации (chat_id={event.chat_id}), игнорируем.")
+    logger.debug(f"DEBUG: Типы: event.chat_id={event.chat_id} ({type(event.chat_id)}), approval_group={approval_group} ({type(approval_group)})")
+    if not (event.is_private or (int(event.chat_id) == int(approval_group))):
+        logger.debug(f"DEBUG: wait_for_new_source: сообщение не в личке и не в группе модерации (chat_id={event.chat_id}), выходим")
         return
     logger.debug(f"DEBUG: Получено сообщение в режиме ожидания нового источника. sender_id={event.sender_id}, my_user_id={my_user_id}")
     if event.sender_id == my_user_id:
         logger.debug("DEBUG: Сообщение отправлено ботом, игнорируем.")
         return
-
     channel_id = None
     if event.fwd_from:
+        logger.debug(f"DEBUG: event.fwd_from найден: {event.fwd_from!r}")
         # Новый способ: через from_id
         if hasattr(event.fwd_from, "channel_id") and event.fwd_from.channel_id:
             channel_id = str(event.fwd_from.channel_id)
+            logger.debug(f"DEBUG: channel_id найден через event.fwd_from.channel_id: {channel_id}")
         elif hasattr(event.fwd_from, "from_id") and hasattr(event.fwd_from.from_id, "channel_id"):
             channel_id = str(event.fwd_from.from_id.channel_id)
-
+            logger.debug(f"DEBUG: channel_id найден через event.fwd_from.from_id.channel_id: {channel_id}")
+    else:
+        logger.debug("DEBUG: event.fwd_from отсутствует")
     if channel_id:
         logger.info(f"INFO: Добавляем новый источник: {channel_id}")
         try:
@@ -381,6 +402,7 @@ async def wait_for_new_source(event):
                     entity_id = int(f"-100{channel_id}")
                 channel_entity = await event.client.get_entity(entity_id)
                 channel_title = getattr(channel_entity, "title", str(channel_id))
+                logger.debug(f"DEBUG: Получен объект канала: {channel_entity}")
             except Exception as e:
                 logger.error(f"ERROR: Не удалось получить имя канала по id {channel_id}: {e}")
                 channel_title = str(channel_id)
@@ -468,13 +490,14 @@ async def handle_remsource(event):
 @events.register(events.NewMessage(pattern=r'^/settarget'))
 async def handle_settarget(event):
     global set_target_mode
+    reset_all_modes()
     set_target_mode = True
     await event.reply("Пожалуйста, перешлите сообщение из канала, который должен стать целевым.")
 
 @events.register(events.NewMessage)
 async def wait_for_settarget(event):
-    global set_target_mode, target_channel, my_user_id
-    if not set_target_mode:
+    global set_target_mode, awaiting_new_source, set_group_mode, set_group_wait_link, target_channel, my_user_id
+    if not set_target_mode or awaiting_new_source or set_group_mode or set_group_wait_link:
         return
     if not (event.is_private or (event.chat_id == approval_group)):
         return
@@ -517,6 +540,7 @@ async def handle_setgroup(event):
         return
     text = event.raw_text.strip().replace(" ", "")
     if f"/setgroup{SETGROUP_PASSWORD}" in text:
+        reset_all_modes()
         set_group_mode = True
         set_group_wait_link = True
         await event.reply("Пожалуйста, добавьте меня в группу для курирования и пришлите ссылку на группу (например, t.me/xxxxx).")
@@ -532,8 +556,8 @@ async def handle_setgroup(event):
 
 @events.register(events.NewMessage)
 async def wait_for_setgroup(event):
-    global set_group_mode, set_group_wait_link, approval_group, my_user_id
-    if not set_group_mode or not set_group_wait_link:
+    global set_group_mode, set_group_wait_link, awaiting_new_source, set_target_mode, my_user_id, approval_group
+    if not set_group_mode or not set_group_wait_link or awaiting_new_source or set_target_mode:
         return
     if not event.is_private:
         return
@@ -566,12 +590,15 @@ async def wait_for_setgroup(event):
             set_group_mode = False
             set_group_wait_link = False
             return
-        approval_group = int(entity.id)
+        val = str(entity.id)
+        if not val.startswith('-100'):
+            val = f'-100{val}'
+        approval_group = int(val)
         set_group_mode = False
         set_group_wait_link = False
         # Сохраняем группу одобрения в базу
         async with aiosqlite.connect("fc_database.sqlite") as db:
-            await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("approval_group", str(approval_group)))
+            await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", ("approval_group", val))
             await db.commit()
         await event.reply(f"Теперь я буду отправлять весь контент в группу {group_title}")
         logger.info(f"INFO: Группа {group_title} ({link}) установлена как группа одобрения.")
