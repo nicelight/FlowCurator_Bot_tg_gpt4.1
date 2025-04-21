@@ -450,8 +450,12 @@ async def handle_listsource(event):
                 channel_title = "Неизвестно"
             reply_lines.append(f"{idx} : {channel_title} : {channel_id}")
 
-        reply_text = "\n".join(reply_lines)
-        await event.reply(f"Список источников:\n{reply_text}")
+        # Разбиваем на группы по 20
+        chunk_size = 20
+        for i in range(0, len(reply_lines), chunk_size):
+            chunk = reply_lines[i:i+chunk_size]
+            reply_text = "\n".join(chunk)
+            await event.reply(f"Список источников (стр. {i//chunk_size+1}):\n{reply_text}")
         logger.info("INFO: Список источников отправлен пользователю.")
     except Exception as e:
         logger.error(f"ERROR: Ошибка при обработке /listsource: {e}")
