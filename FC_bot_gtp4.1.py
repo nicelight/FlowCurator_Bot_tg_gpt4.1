@@ -25,8 +25,8 @@ from telethon.tl.functions.channels import JoinChannelRequest
 # ID: -1002252559154
 
 #API ключи от telegram user bot: my.telegram.org
-YOUR_API_ID = 25979825
-YOUR_API_HASH = 'e2a55f23f44e1aeda0fc6223b0505d7e'
+YOUR_API_ID = _25979825
+YOUR_API_HASH = '_e2a55f23f44e1aeda0fc6223b0505d7e'
 SETGROUP_PASSWORD = "5555"  # Пароль для смены группы одобрения
 approval_group = -1002284347666    #  ID группы одобрения
 target_channel = -1002252559154      # ID целевого канала
