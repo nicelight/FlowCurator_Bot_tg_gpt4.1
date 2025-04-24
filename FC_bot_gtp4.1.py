@@ -25,8 +25,8 @@ from telethon.tl.functions.channels import JoinChannelRequest
 # ID: -1002252559154
 
 #API ключи от telegram user bot: my.telegram.org
-YOUR_API_ID = _25979825
-YOUR_API_HASH = '_e2a55f23f44e1aeda0fc6223b0505d7e'
+YOUR_API_ID = 25979825
+YOUR_API_HASH = 'e2a55f23f44e1aeda0fc6223b0505d7e'
 SETGROUP_PASSWORD = "5555"  # Пароль для смены группы одобрения
 approval_group = -1002284347666    #  ID группы одобрения
 target_channel = -1002252559154      # ID целевого канала
@@ -368,7 +368,7 @@ async def handle_addsource(event):
 @events.register(events.NewMessage)
 async def wait_for_new_source(event):
     global awaiting_new_source, set_target_mode, set_group_mode, set_group_wait_link, my_user_id
-    logger.debug("DEBUG: обработка нового сообщения")
+    # logger.debug("DEBUG: обработка нового сообщения в канале, группе или ЛС")
     # logger.debug(f"DEBUG: wait_for_new_source вызван. awaiting_new_source={awaiting_new_source}, set_target_mode={set_target_mode}, set_group_mode={set_group_mode}, set_group_wait_link={set_group_wait_link}")
     if not awaiting_new_source or set_target_mode or set_group_mode or set_group_wait_link:
         # logger.debug("DEBUG: wait_for_new_source: неактивен режим ожидания нового источника, выходим")

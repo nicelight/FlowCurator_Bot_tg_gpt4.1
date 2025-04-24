@@ -24,3 +24,55 @@
 2025-04-20 16:59:13,303 - ERROR - ERROR: Критическая ошибка в основном цикле: Could not find a matching Constructor ID for the TLObject that was supposed to be read with ID 0aadfc8f. See the FAQ for more details. Remaining bytes: b'\x8f\xfc\xad\n\x00!T0\x08\x00\x00\x00\\.\x8d\x7f\x00\x00\x00\x00v\xe5\xbd\xaf\x02\xfb\x08\xf7!\xd0\x9a\xd1\x80\xd0\xb5\xd0\xbc\xd0\xb5\xd0\xbd\xd1\x81\xd0\xba\xd0\xb0\xd1\x8f \xd0\xb3\xd1\x80\xd1\x83\xd0\xbf\xd0\xbf\xd0\xb0\x00\x00\x11\x1cn\x1c\x02\x00\x00\x00\x1c\xef1\x1b\x85\x98\x18H\x10\x01\x08\x08\xa7\xb9|\xbc`g\x1dh\xa2\x8a\xc8\xd9\x1f\x00\x00\x00\x02\x00\x00\x00\x07\x8f\x0cg\x18\x04\x12\x9f\xfc\x85\xfe\x01\xff\xff\xff\x7f\x15\xc4\xb5\x1c\x00\x00\x00\x00>*l\xa5\xb2\x08\x00\x00\x00\x00\x00\x00\x91\xe1\x04h\xa0\x05\x00\x00\x02\x00\x00\x00 \xd6\x01\xd8\x17\x8f%\x83\xfb\x86R.t3\xca\xf8+;\xe6\xfb'
 2025-04-21 21:21:23,256 - ERROR - ERROR: Ошибка при обработке /listsource: Message was too long (caused by SendMessageRequest)
 2025-04-21 21:21:44,330 - ERROR - ERROR: Ошибка при обработке /listsource: Message was too long (caused by SendMessageRequest)
+2025-04-22 12:26:37,260 - ERROR - ERROR: Не удалось получить entity по ссылке +Rfo3SwVYIW1kYTRi: Cannot find any entity corresponding to "+Rfo3SwVYIW1kYTRi"
+2025-04-22 12:27:49,614 - ERROR - ERROR: Не удалось получить имя канала по id 2340184870: The channel specified is private and you lack permission to access it. Another reason may be that you were banned from it (caused by GetChannelsRequest)
+2025-04-22 12:27:49,615 - ERROR - ERROR: Не удалось подписаться на канал 2340184870: cannot access local variable 'channel_entity' where it is not associated with a value
+2025-04-22 12:28:03,982 - ERROR - ERROR: Не удалось получить имя канала по id -1002340184870: The channel specified is private and you lack permission to access it. Another reason may be that you were banned from it (caused by GetChannelsRequest)
+2025-04-22 18:07:06,855 - ERROR - ERROR: Критическая ошибка в основном цикле: Connection to Telegram failed 5 time(s)
+2025-04-22 18:08:13,220 - ERROR - ERROR: Попытка 1 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-22 18:09:04,023 - ERROR - ERROR: Попытка 2 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-22 18:09:15,096 - ERROR - ERROR: Попытка 3 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-22 18:09:15,096 - ERROR - ERROR: Не удалось открыть сессию за 3 попытки. Завершаем программу.
+2025-04-23 15:31:42,897 - ERROR - ERROR: Критическая ошибка в основном цикле: Connection to Telegram failed 5 time(s)
+2025-04-23 15:31:54,058 - ERROR - ERROR: Попытка 1 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-23 15:32:05,121 - ERROR - ERROR: Попытка 2 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-23 15:32:16,173 - ERROR - ERROR: Попытка 3 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-23 15:32:16,174 - ERROR - ERROR: Не удалось открыть сессию за 3 попытки. Завершаем программу.
+2025-04-24 12:20:05,821 - ERROR - ERROR: Попытка 1 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-24 15:48:15,802 - ERROR - ERROR: Критическая ошибка в основном цикле: Could not find a matching Constructor ID for the TLObject that was supposed to be read with ID 38116ee0. See the FAQ for more details. Remaining bytes: b'\xe0n\x118\x00\x01\x80\x00\xdd\xb4\x03\x00"\x17QY\xd6#\x16P\x00\x00\x00\x00\x1e7\xa5\xa2\xed\'\xdch\x00\x00\x00\x00\xd4\x16\nh\x02\xd0\xa6\x00\xc2\x0f\xd6\x83\x00\x00\x00\x00\x00\x00\x00\x00\xb8I\x07\x00\x15\xc4\xb5\x1c\x01\x00\x00\x00\x12[-\xc3\xed\'\xdch\x00\x00\x00\x00\x15\xc4\xb5\x1c\x01\x00\x00\x00\xdb\xb4\x03\x00\xb8I\x07\x00\x00\x00\x00\x00\x15\xc4\xb5\x1c\x01\x00\x00\x00d\x94%\x83@\xa1T\x00\x00\x00\x00\x00\xed\'\xdch\x00\x00\x00\x00l\xce\xdb\x12K\xf2\xbca2\xd0\xa8\xd0\xb5\xd1\x80\xd0\xb5\xd0\xbc\xd0\xb5\xd1\x82\xd1\x8c\xd0\xb5\xd0\xb2\xd0\xbe \xd1\x87\xd0\xb0\xd1\x82 \xd1\x84\xd0\xb8\xd0\xbb\xd1\x8c\xd1\x82\xd1\x80\xd0\xb0\xd1\x86\xd0\xb8\xd1\x8f\x00\x12scheremetyevo_chat\x00\x11\x1cn\x1c\x02\x00\x00\x00\xae\xe61\x1bg\xd31H\x0f\x01\x08\x08\xa8$R\x98\xc8\xfac\x9a(\xa2\x98\x8f\x02\x00\x00\x00\xee\xa7\xeeg\x18\x04\x12\x9f\xfe\x85\xfe\x03\xff\xff\xff\x7f\x18\x04\x12\x9f\x00\x84\x06\x00\xff\xff\xff\x7f\x15\xc4\xb5\x1c\x01\x00\x00\x00(\xc6\x97\x8fK\x00\x00\x02\x00\x00\x00\x00\xd6#\x16P\x00\x00\x00\x00\xd6\x1c6/v\xe5\xd3\x1b\n\xd0\x98\xd1\x80\xd0\xb8\xd0\xbd\xd0\xb0\x00\rIrynaSavovska\x00\x00\xf1Bo\xe2'
+2025-04-24 16:05:29,104 - ERROR - ERROR: Критическая ошибка в основном цикле: Connection to Telegram failed 5 time(s)
+2025-04-24 16:05:40,181 - ERROR - ERROR: Попытка 1 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-24 16:05:51,258 - ERROR - ERROR: Попытка 2 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-24 16:06:02,312 - ERROR - ERROR: Попытка 3 не удалась: Connection to Telegram failed 5 time(s)
+2025-04-24 16:06:02,313 - ERROR - ERROR: Не удалось открыть сессию за 3 попытки. Завершаем программу.
+2025-04-25 01:47:16,021 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:21,681 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:27,357 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:33,020 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:38,672 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:44,353 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:50,016 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:47:55,680 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:49:44,724 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:49:50,450 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:49:56,155 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:01,848 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:07,533 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:13,351 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:19,015 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:25,770 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:31,422 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:37,120 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:42,840 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:48,557 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:54,245 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:50:59,950 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:05,672 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:11,558 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:17,322 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:23,045 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:30,114 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:35,879 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:41,600 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:47,654 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
+2025-04-25 01:51:53,332 - ERROR - ERROR: Критическая ошибка в основном цикле: 'NoneType' object has no attribute 'id'
