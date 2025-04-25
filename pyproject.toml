@@ -1,0 +1,14 @@
+[project]
+name = "flowcurator-bot-tg-gpt4-1"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiosqlite>=0.21.0",
+    "asyncio>=3.4.3",
+    "datetime>=5.5",
+    "logging>=0.4.9.6",
+    "qrcode>=8.1",
+    "telethon>=1.40.0",
+]

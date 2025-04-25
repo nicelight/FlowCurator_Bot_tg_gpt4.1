@@ -1,15 +1,24 @@
 # Отправьте команду /addsource боту. Бот попросит переслать сообщение из нового канала. Перешлите сообщение, и бот автоматически добавит этот канал в список source channels и сохранит его в базе.
+# 4. Стандартный запуск  проекта uv run main.py
+# 5. добавление зависимостей uv add django requests
 
-
+#imported libs
 import asyncio
 import logging
-import sys
-import signal
 from telethon import TelegramClient, events
+from telethon.tl.functions.channels import JoinChannelRequest
+from telethon.errors import SessionPasswordNeededError
+from telethon.sessions import StringSession
+from telethon.tl.functions.auth import ExportLoginTokenRequest, ImportLoginTokenRequest
 import aiosqlite
 from datetime import datetime, timedelta
+import qrcode
+# system libs? 
 import re
-from telethon.tl.functions.channels import JoinChannelRequest
+from getpass import getpass
+import io
+import sys
+import signal
 
 
 # ------------------------------
@@ -659,14 +668,71 @@ async def periodic_uptime_report():
 # ------------------------------
 # Основная функция запуска бота с обработкой KeyboardInterrupt
 # ------------------------------
+async def perform_qr_login(client):
+    """Авторизация через QR-код (без SMS)."""
+    try:
+        print("Попытка авторизации через QR-код...")
+        qr_login = await client.qr_login()
+        qr = qrcode.QRCode()
+        qr.add_data(qr_login.url)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        buf.seek(0)
+        try:
+            import PIL.Image
+            PIL.Image.open(buf).show()
+            print("QR-код также открыт в отдельном окне. Если не открылся — отсканируйте из консоли.")
+        except Exception:
+            pass
+        print("Сканируйте этот QR-код в Telegram (Настройки → Устройства → Сканировать QR-код):")
+        qr.print_ascii(invert=True)
+        await qr_login.wait()
+        logger.info("INFO: Авторизация через QR-код прошла успешно.")
+        return await client.get_me()
+    except Exception as e:
+        logger.error(f"ERROR: Не удалось пройти авторизацию через QR-код: {e}")
+        return None
+
+async def perform_interactive_login(client):
+    """Запускает интерактивную процедуру входа, если сессия не авторизована."""
+    try:
+        phone = input("Введите номер телефона (например, +71234567890): ").strip()
+        await client.send_code_request(phone)
+        code = input("Введите код из Telegram: ").strip()
+        try:
+            me = await client.sign_in(phone=phone, code=code)
+        except SessionPasswordNeededError:
+            pwd = getpass("Введите пароль 2FA: ")
+            me = await client.sign_in(password=pwd)
+        logger.info("INFO: Успешная авторизация пользователя.")
+        return me
+    except Exception as auth_e:
+        logger.error(f"ERROR: Не удалось пройти интерактивную авторизацию: {auth_e}")
+        # Попробуем QR-код
+        logger.info("INFO: Пробуем авторизацию через QR-код...")
+        return await perform_qr_login(client)
+
 async def run_bot_forever():
     global my_user_id
     while True:
         try:
             logger.info("INFO: Запуск Telegram клиента...")
             client = await open_client_session(YOUR_API_ID, YOUR_API_HASH)
+
             me = await client.get_me()
+            if me is None:
+                logger.warning("WARNING: Клиент не авторизован. Запускаем интерактивную авторизацию.")
+                me = await perform_interactive_login(client)
+                if me is None:
+                    logger.error("ERROR: Авторизация не удалась. Повтор через 30 секунд.")
+                    await client.disconnect()
+                    await asyncio.sleep(30)
+                    continue
+
             my_user_id = me.id
+
             await init_db()  # Инициализируем базу данных и загружаем источники
 
             # Запускаем фоновую задачу аптайма
