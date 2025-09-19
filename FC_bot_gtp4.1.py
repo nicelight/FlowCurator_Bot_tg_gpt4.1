@@ -51,6 +51,7 @@ start_time = datetime.utcnow()  # Время старта для аптайма
 set_target_mode = False  # Флаг ожидания установки целевого канала
 set_group_mode = False  # Флаг ожидания установки группы одобрения
 set_group_wait_link = False  # Флаг ожидания ссылки на группу
+processing_albums = set()  # Временное хранилище обрабатываемых альбомов (channel_id:grouped_id)
 
 # ------------------------------
 # Настройка логирования: запись в файлы и вывод в консоль
@@ -236,22 +237,49 @@ async def forward_to_approval(event):
                 logger.debug(f"DEBUG: Получено сообщение из источника {channel_id}.")
                 # Проверяем, часть ли это альбома
                 if event.grouped_id:
-                    # Получаем все сообщения альбома
-                    messages = []
-                    async for msg in event.client.iter_messages(event.chat_id, min_id=event.id-20, max_id=event.id+20):
-                        if msg.grouped_id == event.grouped_id:
-                            messages.append(msg)
-                    messages = sorted(messages, key=lambda m: m.id)
-                    forwarded = await event.client.forward_messages(approval_group, [m.id for m in messages], event.chat_id)
-                    logger.info(f"INFO: Альбом из {len(messages)} сообщений переслан в группу одобрения.")
-                    # Сохраняем все id сообщений альбома и их связь с grouped_id
+                    grouped_id_str = str(event.grouped_id)
+                    album_key = f"{channel_id}:{grouped_id_str}"
+                    if album_key in processing_albums:
+                        logger.debug(
+                            f"DEBUG: Альбом grouped_id={grouped_id_str} из канала {channel_id} уже обрабатывается, пропускаем повторное событие."
+                        )
+                        return
                     async with aiosqlite.connect("fc_database.sqlite") as db:
-                        for orig_msg, fwd_msg in zip(messages, forwarded):
-                            await db.execute(
-                                "INSERT INTO forwarded_messages (original_message_id, approval_message_id, source_channel_id, forward_date, grouped_id) VALUES (?, ?, ?, ?, ?)",
-                                (str(orig_msg.id), str(fwd_msg.id), channel_id, datetime.utcnow().isoformat(), str(event.grouped_id))
-                            )
-                        await db.commit()
+                        async with db.execute(
+                            "SELECT 1 FROM forwarded_messages WHERE grouped_id = ? AND source_channel_id = ? LIMIT 1",
+                            (grouped_id_str, channel_id),
+                        ) as cursor:
+                            already_in_db = await cursor.fetchone() is not None
+                    if already_in_db:
+                        logger.debug(
+                            f"DEBUG: Альбом grouped_id={grouped_id_str} из канала {channel_id} уже пересылался ранее, пропускаем."
+                        )
+                        return
+                    if album_key in processing_albums:
+                        logger.debug(
+                            f"DEBUG: Альбом grouped_id={grouped_id_str} из канала {channel_id} уже обрабатывается после проверки БД, пропускаем повторное событие."
+                        )
+                        return
+                    processing_albums.add(album_key)
+                    try:
+                        # Получаем все сообщения альбома
+                        messages = []
+                        async for msg in event.client.iter_messages(event.chat_id, min_id=event.id-20, max_id=event.id+20):
+                            if msg.grouped_id == event.grouped_id:
+                                messages.append(msg)
+                        messages = sorted(messages, key=lambda m: m.id)
+                        forwarded = await event.client.forward_messages(approval_group, [m.id for m in messages], event.chat_id)
+                        logger.info(f"INFO: Альбом из {len(messages)} сообщений переслан в группу одобрения.")
+                        # Сохраняем все id сообщений альбома и их связь с grouped_id
+                        async with aiosqlite.connect("fc_database.sqlite") as db:
+                            for orig_msg, fwd_msg in zip(messages, forwarded):
+                                await db.execute(
+                                    "INSERT INTO forwarded_messages (original_message_id, approval_message_id, source_channel_id, forward_date, grouped_id) VALUES (?, ?, ?, ?, ?)",
+                                    (str(orig_msg.id), str(fwd_msg.id), channel_id, datetime.utcnow().isoformat(), grouped_id_str)
+                                )
+                            await db.commit()
+                    finally:
+                        processing_albums.discard(album_key)
                 else:
                     forwarded = await event.forward_to(approval_group)
                     logger.info(f"INFO: Сообщение {event.id} переслано в группу одобрения как {forwarded.id}.")
